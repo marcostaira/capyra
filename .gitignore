@@ -1,0 +1,26 @@
+# Environment
+.env
+
+# Agent data
+workspaces/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# TypeScript
+*.js.map
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Turbo cache
+.turbo

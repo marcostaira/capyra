@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: capyra_postgres
+    environment:
+      POSTGRES_USER: capyra
+      POSTGRES_PASSWORD: capyra
+      POSTGRES_DB: capyra
+    ports:
+      - "5432:5432"
+    volumes:
+      - capyra_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U capyra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build:
+      context: .
+      dockerfile: packages/core/Dockerfile
+    container_name: capyra_gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://capyra:capyra@postgres:5432/capyra
+      GATEWAY_PORT: 18789
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "18789:18789"
+    volumes:
+      - ./workspaces:/app/workspaces
+    restart: unless-stopped
+
+  whatsapp:
+    build:
+      context: .
+      dockerfile: packages/channels/whatsapp/Dockerfile
+    container_name: capyra_whatsapp
+    environment:
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_BASE_URL: ${EVOLUTION_BASE_URL}
+      GATEWAY_URL: ws://gateway:18789
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+      WEBHOOK_PORT: 3001
+      WORKSPACE: default
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+volumes:
+  capyra_pgdata:
