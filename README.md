@@ -83,7 +83,7 @@ capyra init my-company
 
 # Follow the wizard — takes about 2 minutes
 cd my-company
-capyra start
+npm start
 ```
 
 That's it. Capyra is running.
@@ -229,6 +229,9 @@ Capyra: ⚠️ Action required
 You: yes
 
 Capyra: ✔ Draft created — Order #4891.
+
+> **Note:** Capyra automatically handles WhatsApp's LID addressing mode introduced in 2025.
+
 ```
 
 ---
@@ -295,10 +298,9 @@ INSERT INTO tool_policies (workspace, tool_name, policy) VALUES
 
 ```bash
 capyra init [dir]              # Initialize a new instance
-capyra start [dir]             # Start all services
-capyra start [dir] --logs      # Start and stream logs
 capyra status [dir]            # Show service status
 capyra skill test <name>       # Test a skill connection
+npm start                      # Start all services (run inside project dir)
 ```
 
 ---
