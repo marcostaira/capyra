@@ -1,0 +1,41 @@
+name: Docker
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: packages/core/Dockerfile
+          push: true
+          tags: |
+            marcostaira/capyra-gateway:latest
+            marcostaira/capyra-gateway:${{ github.ref_name }}
+
+      - name: Build and push whatsapp
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: packages/channels/whatsapp/Dockerfile
+          push: true
+          tags: |
+            marcostaira/capyra-whatsapp:latest
+            marcostaira/capyra-whatsapp:${{ github.ref_name }}
