@@ -8,10 +8,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
-[![Discord](https://img.shields.io/discord/XXXXXXX?label=Discord&logo=discord)](https://discord.gg/capyra)
+[![Discord](https://img.shields.io/discord/1483183512206180657?label=Discord&logo=discord)](https://discord.gg/4XA7g43Ppu)
 [![GitHub Stars](https://img.shields.io/github/stars/marcostaira/capyra?style=social)](https://github.com/marcostaira/capyra)
 
-[**Quick Start**](#quick-start) · [**Documentation**](https://capyra.dev/docs) · [**Discord**](https://discord.gg/capyra) · [**Skills**](#skills)
+[**Quick Start**](#quick-start) · [**Documentation**](https://capyra.dev/docs) · [**Discord**](https://discord.gg/4XA7g43Ppu) · [**Skills**](#skills)
 
 </div>
 
@@ -442,7 +442,7 @@ npm install
 npm run dev
 ```
 
-[Contributing guide →](CONTRIBUTING.md) · [Discord →](https://discord.gg/capyra)
+[Contributing guide →](CONTRIBUTING.md) · [Discord →](https://discord.gg/4XA7g43Ppu)
 
 ---
 
@@ -458,6 +458,25 @@ Your data never leaves your servers.
 - Docker + Docker Compose
 
 Works on any Linux server, VPS, homelab, or cloud provider.
+
+---
+
+## Docker
+
+Run Capyra without Node.js — just Docker.
+
+```bash
+curl -O https://raw.githubusercontent.com/marcostaira/capyra/main/docker-compose.hub.yml
+curl -O https://raw.githubusercontent.com/marcostaira/capyra/main/.env.example
+cp .env.example .env
+# edit .env with your values
+docker compose -f docker-compose.hub.yml up -d
+```
+
+Images on Docker Hub:
+
+- [marcostaira/capyra-gateway](https://hub.docker.com/r/marcostaira/capyra-gateway)
+- [marcostaira/capyra-whatsapp](https://hub.docker.com/r/marcostaira/capyra-whatsapp)
 
 ---
 
