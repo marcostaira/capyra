@@ -41,17 +41,17 @@ No dashboards to open. No reports to run. No IT ticket to file.
 
 ## Demo
 
-> **Demo 1 — Instant business query**
+> **Demo 1 — Meet your agent**
 
-![Demo 1](docs/assets/demo-query.gif)
+![Demo 1](docs/assets/demo-1.gif)
 
-> **Demo 2 — Proactive stock alert (no one asked)**
+> **Demo 2 — Real SAP data via WhatsApp**
 
-![Demo 2](docs/assets/demo-heartbeat.gif)
+![Demo 2](docs/assets/demo-2.gif)
 
-> **Demo 3 — Action with confirmation**
+> **Demo 3 — Actions with confirmation**
 
-![Demo 3](docs/assets/demo-action.gif)
+![Demo 3](docs/assets/demo-3.gif)
 
 ---
 
@@ -148,7 +148,7 @@ Any developer can build and share a skill. Skills can be:
 | Skill             | Description                           | Status    |
 | ----------------- | ------------------------------------- | --------- |
 | `sap-b1`          | SAP Business One via Service Layer    | ✅ stable |
-| `http`            | Generic HTTP requests                 | ✅ stable |
+| `http`            | Generic HTTP requests                 | 🚧 soon   |
 | `postgres`        | Run queries against any PostgreSQL DB | 🚧 soon   |
 | `cron`            | Scheduled tasks and heartbeats        | 🚧 soon   |
 | `filesystem`      | Read local files and documents        | 🚧 soon   |
@@ -173,7 +173,7 @@ skills:
 
 ```env
 # .env
-SAP_BASE_URL=https://your-sap-server:50000/b1s/v1
+SAP_BASE_URL=https://your-sap-server:50000/b1s/v2
 SAP_COMPANY_DB=YOUR_DB
 SAP_USERNAME=manager
 SAP_PASSWORD=your-password
