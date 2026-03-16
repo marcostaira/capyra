@@ -94,6 +94,11 @@ Update an existing business partner.
 - Requires CardCode — use sap_search_partners first if only name is known
 - Only send fields that need to be changed
 
+## Brazil-specific rules
+
+- Currency code for Brazilian Real is "R$" not "BRL"
+- Always use "R$" when setting currency for Brazilian companies
+
 ## SAP B1 Document Types
 
 | Document         | SAP Table | API Endpoint     | Description            |

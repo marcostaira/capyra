@@ -1,6 +1,7 @@
 export function generateDockerCompose(opts: {
   withWhatsApp: boolean;
   withSap: boolean;
+  workspace?: string;
 }): string {
   const whatsappService = opts.withWhatsApp
     ? `
@@ -27,7 +28,7 @@ export function generateDockerCompose(opts: {
   return `services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: capyra_postgres
+    container_name: capyra_${opts.workspace ?? "default"}_postgres
     environment:
       POSTGRES_USER: capyra
       POSTGRES_PASSWORD: capyra

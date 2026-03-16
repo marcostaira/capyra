@@ -66,12 +66,14 @@ async function getOrCreateGatewayClient(
   let pendingApproval = false;
 
   client.on("agent_message", async (payload) => {
-    pendingApproval = false;
     const text = payload.content as string;
     try {
       await sender.sendText(from, text);
     } catch (err) {
-      logger.error("Failed to send WhatsApp message", { from, err });
+      logger.error("Failed to send WhatsApp message", {
+        from,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 

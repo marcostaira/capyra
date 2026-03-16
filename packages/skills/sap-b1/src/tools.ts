@@ -1,10 +1,5 @@
 import { SapB1Client } from "./client.js";
-import {
-  SapB1Config,
-  SapDocument,
-  SapItem,
-  SapBusinessPartner,
-} from "./types.js";
+import { SapDocument, SapItem, SapBusinessPartner } from "./types.js";
 
 export interface Tool {
   name: string;
@@ -33,8 +28,7 @@ export const tools: Tool[] = [
     },
     execute: async ({ sql }, client) => {
       if (typeof sql !== "string") throw new Error("sql must be a string");
-      const upper = sql.trim().toUpperCase();
-      if (!upper.startsWith("SELECT")) {
+      if (!sql.trim().toUpperCase().startsWith("SELECT")) {
         throw new Error("Only SELECT queries are allowed in sap_query");
       }
       return client.query(sql as string);
@@ -53,10 +47,7 @@ export const tools: Tool[] = [
           enum: ["open", "closed", "cancelled", "all"],
           description: "Order status filter",
         },
-        cardCode: {
-          type: "string",
-          description: "Customer code (optional)",
-        },
+        cardCode: { type: "string", description: "Customer code (optional)" },
         fromDate: {
           type: "string",
           description: "Start date YYYY-MM-DD (optional)",
@@ -65,10 +56,7 @@ export const tools: Tool[] = [
           type: "string",
           description: "End date YYYY-MM-DD (optional)",
         },
-        top: {
-          type: "number",
-          description: "Max results, default 20",
-        },
+        top: { type: "number", description: "Max results, default 20" },
       },
       required: ["status"],
     },
@@ -77,7 +65,6 @@ export const tools: Tool[] = [
       client,
     ) => {
       const filters: string[] = [];
-
       if (status === "open") filters.push("DocumentStatus eq 'bost_Open'");
       if (status === "closed") filters.push("DocumentStatus eq 'bost_Close'");
       if (status === "cancelled") filters.push("Cancelled eq 'tYES'");
@@ -91,11 +78,7 @@ export const tools: Tool[] = [
         $select:
           "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,DocumentStatus",
       };
-
-      if (filters.length > 0) {
-        params["$filter"] = filters.join(" and ");
-      }
-
+      if (filters.length > 0) params["$filter"] = filters.join(" and ");
       return client.get<{ value: SapDocument[] }>("Orders", params);
     },
   },
@@ -109,8 +92,7 @@ export const tools: Tool[] = [
       properties: {
         docEntry: {
           type: "number",
-          description:
-            "DocEntry of the order (preferred, use this if available)",
+          description: "DocEntry of the order (preferred)",
         },
         docNum: {
           type: "number",
@@ -125,15 +107,12 @@ export const tools: Tool[] = [
             "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,Comments,DocumentLines",
         });
       }
-
-      // busca pelo DocNum
       const result = await client.get<{ value: SapDocument[] }>("Orders", {
         $filter: `DocNum eq ${docNum}`,
         $select:
           "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,Comments,DocumentLines",
         $top: "1",
       });
-
       return result.value?.[0] ?? null;
     },
   },
@@ -171,10 +150,7 @@ export const tools: Tool[] = [
     parameters: {
       type: "object",
       properties: {
-        cardCode: {
-          type: "string",
-          description: "Business partner code",
-        },
+        cardCode: { type: "string", description: "Business partner code" },
       },
       required: ["cardCode"],
     },
@@ -201,6 +177,7 @@ export const tools: Tool[] = [
           "CreateDate",
           "UpdateDate",
           "Frozen",
+          "BPAddresses",
         ].join(","),
       });
     },
@@ -212,19 +189,13 @@ export const tools: Tool[] = [
     parameters: {
       type: "object",
       properties: {
-        search: {
-          type: "string",
-          description: "Search term — matches against name, phone or email",
-        },
+        search: { type: "string", description: "Search term" },
         cardType: {
           type: "string",
           enum: ["cCustomer", "cSupplier", "cLead", "all"],
           description: "Filter by type (optional, default all)",
         },
-        top: {
-          type: "number",
-          description: "Max results, default 10",
-        },
+        top: { type: "number", description: "Max results, default 10" },
       },
       required: ["search"],
     },
@@ -233,7 +204,6 @@ export const tools: Tool[] = [
         `(contains(CardName,'${search}') or contains(Phone1,'${search}') or contains(EmailAddress,'${search}') or contains(FederalTaxID,'${search}'))`,
       ];
       if (cardType !== "all") filters.push(`CardType eq '${cardType}'`);
-
       return client.get<{ value: SapBusinessPartner[] }>("BusinessPartners", {
         $select:
           "CardCode,CardName,CardType,Phone1,Cellular,EmailAddress,FederalTaxID,Frozen",
@@ -251,10 +221,7 @@ export const tools: Tool[] = [
     parameters: {
       type: "object",
       properties: {
-        cardCode: {
-          type: "string",
-          description: "Customer code",
-        },
+        cardCode: { type: "string", description: "Customer code" },
         items: {
           type: "array",
           description: "Order lines",
@@ -268,10 +235,7 @@ export const tools: Tool[] = [
             required: ["itemCode", "quantity"],
           },
         },
-        comments: {
-          type: "string",
-          description: "Order notes (optional)",
-        },
+        comments: { type: "string", description: "Order notes (optional)" },
       },
       required: ["cardCode", "items"],
     },
@@ -315,7 +279,6 @@ export const tools: Tool[] = [
         $orderby: "CreateDate desc",
         $filter: `CardType eq '${cardType}' and Series ne 1`,
       });
-
       const series = result.value?.[0]?.Series;
       if (!series) {
         return {
@@ -336,7 +299,7 @@ export const tools: Tool[] = [
       properties: {
         cardName: {
           type: "string",
-          description: "Full name (Title Case will be applied automatically)",
+          description: "Full name (Title Case applied automatically)",
         },
         cardType: {
           type: "string",
@@ -367,24 +330,31 @@ export const tools: Tool[] = [
         },
         groupCode: { type: "number", description: "BP group code" },
         notes: { type: "string", description: "Additional notes" },
-        billToStreet: { type: "string", description: "Billing address street" },
-        billToCity: { type: "string", description: "Billing address city" },
-        billToState: {
-          type: "string",
-          description: "Billing address state code e.g. SP, PR",
-        },
-        billToZipCode: {
-          type: "string",
-          description: "Billing address zip code",
-        },
-        billToCountry: {
-          type: "string",
-          description: "Billing address country code e.g. BR",
-        },
         series: {
           type: "number",
           description:
             "SAP series number — use sap_get_bp_default_series if unknown",
+        },
+        addressStreet: {
+          type: "string",
+          description: "Billing address street",
+        },
+        addressCity: { type: "string", description: "Billing address city" },
+        addressState: {
+          type: "string",
+          description: "Billing address state code e.g. SP, PR",
+        },
+        addressZipCode: {
+          type: "string",
+          description: "Billing address zip code",
+        },
+        addressCountry: {
+          type: "string",
+          description: "Billing address country code e.g. BR",
+        },
+        addressName: {
+          type: "string",
+          description: "Address label, default Cobrança",
         },
       },
       required: ["cardName", "cardType"],
@@ -397,7 +367,7 @@ export const tools: Tool[] = [
         CardType: p.cardType,
         Series: p.series ?? 56,
       };
-
+      if (body.Currency === "BRL") body.Currency = "R$";
       const fieldMap: Record<string, string> = {
         phone1: "Phone1",
         phone2: "Phone2",
@@ -413,17 +383,26 @@ export const tools: Tool[] = [
         payTermsGrpCode: "PayTermsGrpCode",
         groupCode: "GroupCode",
         notes: "Notes",
-        billToStreet: "BillToStreet",
-        billToCity: "BillToCity",
-        billToState: "BillToState",
-        billToZipCode: "BillToZipCode",
-        billToCountry: "BillToCountry",
       };
 
       for (const [key, sapKey] of Object.entries(fieldMap)) {
         if (p[key] !== undefined && p[key] !== null && p[key] !== "") {
           body[sapKey] = p[key];
         }
+      }
+
+      if (p.addressStreet || p.addressCity || p.addressState) {
+        body.BPAddresses = [
+          {
+            AddressName: p.addressName ?? "Cobrança",
+            Street: p.addressStreet ?? null,
+            City: p.addressCity ?? null,
+            State: p.addressState ?? null,
+            ZipCode: p.addressZipCode ?? null,
+            Country: p.addressCountry ?? "BR",
+            AddressType: "bo_BillTo",
+          },
+        ];
       }
 
       return client.post("BusinessPartners", body);
@@ -474,19 +453,26 @@ export const tools: Tool[] = [
           enum: ["tYES", "tNO"],
           description: "Freeze or unfreeze the BP",
         },
-        billToStreet: { type: "string", description: "Billing address street" },
-        billToCity: { type: "string", description: "Billing address city" },
-        billToState: {
+        addressStreet: {
+          type: "string",
+          description: "Billing address street",
+        },
+        addressCity: { type: "string", description: "Billing address city" },
+        addressState: {
           type: "string",
           description: "Billing address state code e.g. SP, PR",
         },
-        billToZipCode: {
+        addressZipCode: {
           type: "string",
           description: "Billing address zip code",
         },
-        billToCountry: {
+        addressCountry: {
           type: "string",
           description: "Billing address country code e.g. BR",
+        },
+        addressName: {
+          type: "string",
+          description: "Address name to update, default Cobrança",
         },
       },
       required: ["cardCode"],
@@ -494,11 +480,10 @@ export const tools: Tool[] = [
     execute: async (params, client) => {
       const p = params as Record<string, unknown>;
       const cardCode = p.cardCode as string;
-
       const body: Record<string, unknown> = {};
 
       if (p.cardName) body.CardName = toTitleCase(p.cardName as string);
-
+      if (body.Currency === "BRL") body.Currency = "R$";
       const fieldMap: Record<string, string> = {
         phone1: "Phone1",
         phone2: "Phone2",
@@ -515,17 +500,26 @@ export const tools: Tool[] = [
         groupCode: "GroupCode",
         notes: "Notes",
         frozen: "Frozen",
-        billToStreet: "BillToStreet",
-        billToCity: "BillToCity",
-        billToState: "BillToState",
-        billToZipCode: "BillToZipCode",
-        billToCountry: "BillToCountry",
       };
 
       for (const [key, sapKey] of Object.entries(fieldMap)) {
         if (p[key] !== undefined && p[key] !== null && p[key] !== "") {
           body[sapKey] = p[key];
         }
+      }
+
+      if (p.addressStreet || p.addressCity || p.addressState) {
+        body.BPAddresses = [
+          {
+            AddressName: p.addressName ?? "Cobrança",
+            Street: p.addressStreet ?? null,
+            City: p.addressCity ?? null,
+            State: p.addressState ?? null,
+            ZipCode: p.addressZipCode ?? null,
+            Country: p.addressCountry ?? "BR",
+            AddressType: "bo_BillTo",
+          },
+        ];
       }
 
       if (Object.keys(body).length === 0) {
@@ -543,10 +537,7 @@ export const tools: Tool[] = [
     parameters: {
       type: "object",
       properties: {
-        top: {
-          type: "number",
-          description: "Max results, default 10",
-        },
+        top: { type: "number", description: "Max results, default 10" },
         cardCode: {
           type: "string",
           description: "Filter by customer code (optional)",
@@ -558,14 +549,10 @@ export const tools: Tool[] = [
         $select:
           "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocumentStatus",
         $filter: "DocObjectCode eq 'oOrders'",
-        $orderby: "DocEntry desc",
+        $orderby: "CreateTS desc",
         $top: String(top),
       };
-
-      if (cardCode) {
-        params.$filter += ` and CardCode eq '${cardCode}'`;
-      }
-
+      if (cardCode) params.$filter += ` and CardCode eq '${cardCode}'`;
       return client.get<{ value: SapDocument[] }>("Drafts", params);
     },
   },
@@ -577,4 +564,13 @@ function toTitleCase(str: string): string {
     .split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function generateNextCode(lastCode: string): string {
+  const match = lastCode.match(/^([A-Za-z]*)(\d+)$/);
+  if (!match) return lastCode + "1";
+  const prefix = match[1];
+  const num = parseInt(match[2], 10) + 1;
+  const padded = String(num).padStart(match[2].length, "0");
+  return `${prefix}${padded}`;
 }

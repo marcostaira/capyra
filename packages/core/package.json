@@ -1,8 +1,15 @@
 {
   "name": "@capyra/core",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc && npm run copy:assets",
     "copy:assets": "mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
@@ -10,22 +17,22 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "ws": "^8.17.0",
+    "@anthropic-ai/sdk": "^0.24.0",
+    "cron": "^3.1.7",
+    "dotenv": "^16.4.0",
+    "js-yaml": "^4.1.0",
+    "openai": "^4.52.0",
     "pg": "^8.11.0",
     "pgvector": "^0.2.0",
     "uuid": "^10.0.0",
-    "js-yaml": "^4.1.0",
-    "dotenv": "^16.4.0",
-    "@anthropic-ai/sdk": "^0.24.0",
-    "openai": "^4.52.0",
-    "zod": "^3.23.0",
-    "cron": "^3.1.7",
-    "winston": "^3.13.0"
+    "winston": "^3.13.0",
+    "ws": "^8.17.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.10",
+    "@types/js-yaml": "^4.0.9",
     "@types/pg": "^8.11.6",
     "@types/uuid": "^10.0.0",
-    "@types/js-yaml": "^4.0.9"
+    "@types/ws": "^8.5.10"
   }
 }

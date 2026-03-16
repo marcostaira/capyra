@@ -11,6 +11,7 @@ export interface EvolutionWebhookPayload {
 export interface EvolutionMessageData {
   key: {
     remoteJid: string; // phone@s.whatsapp.net
+    remoteJidAlt?: string;
     fromMe: boolean;
     id: string;
   };

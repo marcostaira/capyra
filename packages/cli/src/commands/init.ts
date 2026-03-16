@@ -2,14 +2,15 @@ import inquirer from "inquirer";
 import ora from "ora";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { execSync, spawnSync } from "child_process";
+import { spawnSync } from "child_process";
 import chalk from "chalk";
 import { log } from "../utils/logger";
 import { writeEnv, generateSecret, EnvValues } from "../utils/env";
 import { isDockerAvailable, isDockerComposeAvailable } from "../utils/docker";
+import { generateDockerCompose } from "../templates/docker-compose";
 import { generateCapyraConfig } from "../templates/capyra-config";
 
-const REPO_URL = "https://github.com/yourusername/capyra.git";
+const CAPYRA_VERSION = "0.1.0";
 
 export async function runInit(targetDir: string): Promise<void> {
   log.capyra();
@@ -31,27 +32,11 @@ export async function runInit(targetDir: string): Promise<void> {
     process.exit(1);
   }
 
-  if (!isGitAvailable()) {
-    spinner.fail("Git not found. Install Git first: https://git-scm.com/");
-    process.exit(1);
-  }
-
   spinner.succeed("Requirements OK");
 
-  // ── clone ou usa diretório existente ──────────
-  const isExisting = existsSync(join(dir, "package.json"));
-
-  if (!isExisting) {
-    const cloneSpinner = ora(`Cloning Capyra into ${dir}...`).start();
-    try {
-      spawnSync("git", ["clone", REPO_URL, dir], { stdio: "pipe" });
-      cloneSpinner.succeed("Repository cloned");
-    } catch (err) {
-      cloneSpinner.fail("Failed to clone repository");
-      process.exit(1);
-    }
-  } else {
-    log.info("Existing Capyra installation found — skipping clone");
+  // ── cria diretório ─────────────────────────────
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
   }
 
   if (existsSync(join(dir, ".env"))) {
@@ -171,47 +156,62 @@ export async function runInit(targetDir: string): Promise<void> {
     },
   ]);
 
-  // ── instala dependências ───────────────────────
-  const installSpinner = ora("Installing dependencies...").start();
-  const installResult = spawnSync("npm", ["install"], {
-    cwd: dir,
-    stdio: "pipe",
-  });
-  if (installResult.status !== 0) {
-    installSpinner.fail("npm install failed");
-    console.error(installResult.stderr?.toString());
-    process.exit(1);
-  }
-  installSpinner.succeed("Dependencies installed");
+  // ── gera package.json do projeto ──────────────
+  const genSpinner = ora("Generating project files...").start();
 
-  // ── build ──────────────────────────────────────
-  const buildSpinner = ora("Building packages...").start();
-  const buildResult = spawnSync("npm", ["run", "build"], {
-    cwd: dir,
-    stdio: "pipe",
-  });
-  if (buildResult.status !== 0) {
-    buildSpinner.fail("Build failed");
-    console.error(buildResult.stderr?.toString());
-    process.exit(1);
-  }
+  const projectPackageJson = {
+    name: answers.workspace,
+    version: "1.0.0",
+    private: true,
+    scripts: {
+      start:
+        'concurrently -n gateway,whatsapp -c cyan,green "node node_modules/@capyra/core/dist/index.js" "node node_modules/@capyra/channel-whatsapp/dist/index.js"',
+      "start:gateway": "node node_modules/@capyra/core/dist/index.js",
+      "start:whatsapp":
+        "node node_modules/@capyra/channel-whatsapp/dist/index.js",
+    },
+    dependencies: {
+      "@capyra/core": CAPYRA_VERSION,
+      "@capyra/channel-whatsapp": CAPYRA_VERSION,
+      "@capyra/skill-sap-b1": CAPYRA_VERSION,
+      concurrently: "^8.2.0",
+    },
+  };
 
-  // copia migration
-  mkdirSync(join(dir, "packages/core/dist/db/migrations"), { recursive: true });
-  try {
-    execSync(
-      `cp ${dir}/packages/core/src/db/migrations/*.sql ${dir}/packages/core/dist/db/migrations/`,
-    );
-  } catch {}
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify(projectPackageJson, null, 2),
+    "utf-8",
+  );
 
-  buildSpinner.succeed("Build complete");
+  // ── gera docker-compose.yml ───────────────────
+  writeFileSync(
+    join(dir, "docker-compose.yml"),
+    generateDockerCompose({
+      withWhatsApp: Boolean(answers.withWhatsApp),
+      withSap: Boolean(answers.withSap),
+      workspace: answers.workspace,
+    }),
+    "utf-8",
+  );
 
-  // ── gera arquivos de config ────────────────────
-  const genSpinner = ora("Generating configuration...").start();
-
+  // ── gera capyra.config.yml ────────────────────
   const model =
     answers.llmProvider === "openai" ? "gpt-4o" : "claude-sonnet-4-6";
 
+  writeFileSync(
+    join(dir, "capyra.config.yml"),
+    generateCapyraConfig({
+      workspace: answers.workspace,
+      llmProvider: answers.llmProvider === "openai" ? "openai" : "anthropic",
+      model,
+      withSap: Boolean(answers.withSap),
+      withWhatsApp: Boolean(answers.withWhatsApp),
+    }),
+    "utf-8",
+  );
+
+  // ── gera .env ─────────────────────────────────
   const envValues: EnvValues = {
     DATABASE_URL: "postgresql://capyra:capyra@localhost:5432/capyra",
     GATEWAY_PORT: "18789",
@@ -234,18 +234,7 @@ export async function runInit(targetDir: string): Promise<void> {
 
   writeEnv(dir, envValues);
 
-  writeFileSync(
-    join(dir, "capyra.config.yml"),
-    generateCapyraConfig({
-      workspace: answers.workspace,
-      llmProvider: answers.llmProvider === "openai" ? "openai" : "anthropic",
-      model,
-      withSap: Boolean(answers.withSap),
-      withWhatsApp: Boolean(answers.withWhatsApp),
-    }),
-    "utf-8",
-  );
-
+  // ── cria workspace ────────────────────────────
   mkdirSync(join(dir, "workspaces", answers.workspace), { recursive: true });
   writeFileSync(
     join(dir, "workspaces", answers.workspace, "HEARTBEAT.md"),
@@ -253,7 +242,36 @@ export async function runInit(targetDir: string): Promise<void> {
     "utf-8",
   );
 
-  genSpinner.succeed("Configuration generated");
+  genSpinner.succeed("Project files generated");
+
+  // ── npm install ───────────────────────────────
+  const installSpinner = ora("Installing dependencies...").start();
+  const installResult = spawnSync("npm", ["install"], {
+    cwd: dir,
+    stdio: "inherit",
+  });
+
+  if (installResult.status !== 0) {
+    installSpinner.fail("npm install failed");
+    process.exit(1);
+  }
+
+  installSpinner.succeed("Dependencies installed");
+
+  // ── sobe o postgres ───────────────────────────
+  const dbSpinner = ora("Starting PostgreSQL...").start();
+  const dbResult = spawnSync("docker", ["compose", "up", "postgres", "-d"], {
+    cwd: dir,
+    stdio: "inherit",
+  });
+
+  if (dbResult.status !== 0) {
+    dbSpinner.warn(
+      "Could not start PostgreSQL automatically — run `docker compose up postgres -d` manually",
+    );
+  } else {
+    dbSpinner.succeed("PostgreSQL started");
+  }
 
   // ── resumo ────────────────────────────────────
   console.log(`
@@ -276,13 +294,4 @@ ${chalk.bold("Next steps:")}
 
 ${chalk.bold("Docs:")} ${chalk.underline("https://capyra.dev/docs")}
 `);
-}
-
-function isGitAvailable(): boolean {
-  try {
-    execSync("git --version", { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
 }

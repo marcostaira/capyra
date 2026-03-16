@@ -1,8 +1,8 @@
 {
   "name": "@capyra/cli",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "bin": {
-    "capyra": "./dist/index.js"
+    "capyra": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",

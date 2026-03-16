@@ -13,7 +13,6 @@ export function createWebhookServer(
   app.post(
     ["/webhook", "/webhook/messages-upsert"],
     async (req: Request, res: Response) => {
-      // responde rápido — processamento é assíncrono
       res.status(200).json({ received: true });
 
       try {
@@ -38,7 +37,7 @@ export function createWebhookServer(
         }
 
         // normaliza o número
-        const from = normalizeJid(key.remoteJid);
+        const from = normalizeJid(key.remoteJid, (key as any).remoteJidAlt);
 
         const incoming: IncomingMessage = {
           instanceName: payload.instance,
@@ -50,8 +49,9 @@ export function createWebhookServer(
         };
 
         logger.info("Message received", {
-          from: incoming.from,
-          name: incoming.pushName,
+          from: maskPhone(incoming.from),
+          name:
+            process.env.DEMO_MODE === "true" ? "John Smith" : incoming.pushName,
           preview: text.substring(0, 50),
         });
 
@@ -100,7 +100,15 @@ function extractText(
   );
 }
 
-function normalizeJid(jid: string): string {
-  // remove @s.whatsapp.net e @g.us (grupos)
+function normalizeJid(jid: string, jidAlt?: string): string {
+  // se for LID (novo sistema Meta), usa o JID alternativo
+  if (jid.endsWith("@lid") && jidAlt) {
+    return jidAlt.split("@")[0];
+  }
   return jid.split("@")[0];
+}
+
+function maskPhone(phone: string): string {
+  if (phone.length < 8) return "***";
+  return phone.substring(0, 5) + "*****" + phone.substring(phone.length - 1);
 }

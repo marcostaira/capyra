@@ -12,8 +12,20 @@ export class WhatsAppSender {
     this.apiKey = apiKey;
   }
 
+  private normalizeNumber(number: string): string {
+    // remove tudo que não é dígito
+    const digits = number.replace(/\D/g, "");
+
+    // se não começa com 55, adiciona o DDI do Brasil
+    if (!digits.startsWith("55") && digits.length <= 11) {
+      return "55" + digits;
+    }
+
+    return digits;
+  }
+
   async sendText(to: string, text: string): Promise<void> {
-    // Evolution v2 suporta chunks para mensagens longas
+    const normalized = this.normalizeNumber(to);
     const chunks = this.splitMessage(text);
 
     for (const chunk of chunks) {
