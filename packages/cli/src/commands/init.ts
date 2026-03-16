@@ -2,12 +2,14 @@ import inquirer from "inquirer";
 import ora from "ora";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
+import { execSync, spawnSync } from "child_process";
 import chalk from "chalk";
 import { log } from "../utils/logger";
 import { writeEnv, generateSecret, EnvValues } from "../utils/env";
 import { isDockerAvailable, isDockerComposeAvailable } from "../utils/docker";
-import { generateDockerCompose } from "../templates/docker-compose";
 import { generateCapyraConfig } from "../templates/capyra-config";
+
+const REPO_URL = "https://github.com/yourusername/capyra.git";
 
 export async function runInit(targetDir: string): Promise<void> {
   log.capyra();
@@ -29,11 +31,27 @@ export async function runInit(targetDir: string): Promise<void> {
     process.exit(1);
   }
 
+  if (!isGitAvailable()) {
+    spinner.fail("Git not found. Install Git first: https://git-scm.com/");
+    process.exit(1);
+  }
+
   spinner.succeed("Requirements OK");
 
-  // ── cria diretório se não existir ─────────────
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+  // ── clone ou usa diretório existente ──────────
+  const isExisting = existsSync(join(dir, "package.json"));
+
+  if (!isExisting) {
+    const cloneSpinner = ora(`Cloning Capyra into ${dir}...`).start();
+    try {
+      spawnSync("git", ["clone", REPO_URL, dir], { stdio: "pipe" });
+      cloneSpinner.succeed("Repository cloned");
+    } catch (err) {
+      cloneSpinner.fail("Failed to clone repository");
+      process.exit(1);
+    }
+  } else {
+    log.info("Existing Capyra installation found — skipping clone");
   }
 
   if (existsSync(join(dir, ".env"))) {
@@ -41,7 +59,7 @@ export async function runInit(targetDir: string): Promise<void> {
       {
         type: "confirm",
         name: "overwrite",
-        message: `Directory already has a .env file. Overwrite?`,
+        message: ".env already exists. Overwrite?",
         default: false,
       },
     ]);
@@ -79,7 +97,8 @@ export async function runInit(targetDir: string): Promise<void> {
       type: "password",
       name: "anthropicKey",
       message: "Anthropic API key:",
-      when: (a) => a.llmProvider === "anthropic" || a.llmProvider === "both",
+      when: (a: Record<string, string>) =>
+        a.llmProvider === "anthropic" || a.llmProvider === "both",
       validate: (v: string) =>
         v.startsWith("sk-ant-") || "Invalid Anthropic key format",
     },
@@ -87,7 +106,8 @@ export async function runInit(targetDir: string): Promise<void> {
       type: "password",
       name: "openaiKey",
       message: "OpenAI API key:",
-      when: (a) => a.llmProvider === "openai" || a.llmProvider === "both",
+      when: (a: Record<string, string>) =>
+        a.llmProvider === "openai" || a.llmProvider === "both",
       validate: (v: string) =>
         v.startsWith("sk-") || "Invalid OpenAI key format",
     },
@@ -101,7 +121,7 @@ export async function runInit(targetDir: string): Promise<void> {
       type: "input",
       name: "evolutionUrl",
       message: "Evolution API base URL:",
-      when: (a) => a.withWhatsApp,
+      when: (a: Record<string, string>) => a.withWhatsApp,
       default: "https://evolution.yourdomain.com",
       validate: (v: string) => v.startsWith("http") || "Must be a valid URL",
     },
@@ -109,13 +129,13 @@ export async function runInit(targetDir: string): Promise<void> {
       type: "input",
       name: "evolutionInstance",
       message: "Evolution API instance name:",
-      when: (a) => a.withWhatsApp,
+      when: (a: Record<string, string>) => a.withWhatsApp,
     },
     {
       type: "password",
       name: "evolutionApiKey",
       message: "Evolution API key (instance key):",
-      when: (a) => a.withWhatsApp,
+      when: (a: Record<string, string>) => a.withWhatsApp,
     },
     {
       type: "confirm",
@@ -127,37 +147,71 @@ export async function runInit(targetDir: string): Promise<void> {
       type: "input",
       name: "sapUrl",
       message: "SAP B1 Service Layer URL:",
-      when: (a) => a.withSap,
-      default: "https://your-sap-server:50000/b1s/v1",
+      when: (a: Record<string, string>) => a.withSap,
+      default: "https://your-sap-server:50000/b1s/v2",
     },
     {
       type: "input",
       name: "sapCompanyDb",
       message: "SAP B1 Company DB:",
-      when: (a) => a.withSap,
+      when: (a: Record<string, string>) => a.withSap,
     },
     {
       type: "input",
       name: "sapUsername",
       message: "SAP B1 username:",
-      when: (a) => a.withSap,
+      when: (a: Record<string, string>) => a.withSap,
       default: "manager",
     },
     {
       type: "password",
       name: "sapPassword",
       message: "SAP B1 password:",
-      when: (a) => a.withSap,
+      when: (a: Record<string, string>) => a.withSap,
     },
   ]);
 
-  // ── gera arquivos ─────────────────────────────
-  const genSpinner = ora("Generating files...").start();
+  // ── instala dependências ───────────────────────
+  const installSpinner = ora("Installing dependencies...").start();
+  const installResult = spawnSync("npm", ["install"], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  if (installResult.status !== 0) {
+    installSpinner.fail("npm install failed");
+    console.error(installResult.stderr?.toString());
+    process.exit(1);
+  }
+  installSpinner.succeed("Dependencies installed");
+
+  // ── build ──────────────────────────────────────
+  const buildSpinner = ora("Building packages...").start();
+  const buildResult = spawnSync("npm", ["run", "build"], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  if (buildResult.status !== 0) {
+    buildSpinner.fail("Build failed");
+    console.error(buildResult.stderr?.toString());
+    process.exit(1);
+  }
+
+  // copia migration
+  mkdirSync(join(dir, "packages/core/dist/db/migrations"), { recursive: true });
+  try {
+    execSync(
+      `cp ${dir}/packages/core/src/db/migrations/*.sql ${dir}/packages/core/dist/db/migrations/`,
+    );
+  } catch {}
+
+  buildSpinner.succeed("Build complete");
+
+  // ── gera arquivos de config ────────────────────
+  const genSpinner = ora("Generating configuration...").start();
 
   const model =
     answers.llmProvider === "openai" ? "gpt-4o" : "claude-sonnet-4-6";
 
-  // .env
   const envValues: EnvValues = {
     DATABASE_URL: "postgresql://capyra:capyra@localhost:5432/capyra",
     GATEWAY_PORT: "18789",
@@ -180,55 +234,35 @@ export async function runInit(targetDir: string): Promise<void> {
 
   writeEnv(dir, envValues);
 
-  // docker-compose.yml
-  writeFileSync(
-    join(dir, "docker-compose.yml"),
-    generateDockerCompose({
-      withWhatsApp: answers.withWhatsApp,
-      withSap: answers.withSap,
-    }),
-    "utf-8",
-  );
-
-  // capyra.config.yml
   writeFileSync(
     join(dir, "capyra.config.yml"),
     generateCapyraConfig({
       workspace: answers.workspace,
       llmProvider: answers.llmProvider === "openai" ? "openai" : "anthropic",
       model,
-      withSap: answers.withSap,
-      withWhatsApp: answers.withWhatsApp,
+      withSap: Boolean(answers.withSap),
+      withWhatsApp: Boolean(answers.withWhatsApp),
     }),
     "utf-8",
   );
 
-  // workspaces dir
   mkdirSync(join(dir, "workspaces", answers.workspace), { recursive: true });
   writeFileSync(
     join(dir, "workspaces", answers.workspace, "HEARTBEAT.md"),
-    `# Heartbeat Checklist\n\n` +
-      `- [ ] Check for pending approvals\n` +
-      `- [ ] Monitor critical stock levels\n`,
+    `# Heartbeat Checklist\n\n- [ ] Check for pending approvals\n- [ ] Monitor critical stock levels\n`,
     "utf-8",
   );
 
-  genSpinner.succeed("Files generated");
+  genSpinner.succeed("Configuration generated");
 
   // ── resumo ────────────────────────────────────
   console.log(`
 ${chalk.bold.green("✔ Capyra initialized successfully!")}
 
-${chalk.bold("Files created:")}
-  ${chalk.cyan(".env")}                  — your secrets (never commit this)
-  ${chalk.cyan("docker-compose.yml")}    — services configuration
-  ${chalk.cyan("capyra.config.yml")}     — agent configuration
-  ${chalk.cyan("workspaces/")}           — agent memory and skills
-
 ${chalk.bold("Next steps:")}
 
   ${chalk.yellow("1.")} Start Capyra:
-     ${chalk.cyan("capyra start")}
+     ${chalk.cyan(`cd ${dir} && npm start`)}
 
   ${
     answers.withWhatsApp
@@ -236,12 +270,19 @@ ${chalk.bold("Next steps:")}
      ${chalk.cyan(`curl -X POST ${answers.evolutionUrl}/webhook/set/${answers.evolutionInstance} \\
        -H "apikey: ${answers.evolutionApiKey}" \\
        -H "Content-Type: application/json" \\
-       -d '{"url":"http://YOUR_SERVER_IP:3001/webhook","events":["messages.upsert"]}'`)}
-
-  ${chalk.yellow("3.")} Send a message on WhatsApp and watch the magic 🦫`
+       -d '{"url":"http://YOUR_SERVER_IP:3001/webhook","events":["messages.upsert"]}'`)}`
       : ""
   }
 
 ${chalk.bold("Docs:")} ${chalk.underline("https://capyra.dev/docs")}
 `);
+}
+
+function isGitAvailable(): boolean {
+  try {
+    execSync("git --version", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }

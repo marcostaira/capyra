@@ -2,22 +2,30 @@
   "name": "capyra",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.9.0",
   "engines": {
     "node": ">=22"
   },
   "workspaces": [
-    "packages/*",
-    "packages/skills/*"
+    "packages/core",
+    "packages/skills/sap-b1",
+    "packages/channels/whatsapp",
+    "packages/cli"
   ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "db:migrate": "node packages/core/dist/db/migrate.js",
-    "db:reset": "node packages/core/dist/db/reset.js"
+    "copy:migrations": "mkdir -p packages/core/dist/db/migrations && cp packages/core/src/db/migrations/*.sql packages/core/dist/db/migrations/",
+    "rebuild": "npm run build && npm run copy:migrations",
+    "start": "npm run rebuild && concurrently -n gateway,whatsapp -c cyan,green \"node packages/core/dist/index.js\" \"node packages/channels/whatsapp/dist/index.js\"",
+    "start:gateway": "node packages/core/dist/index.js",
+    "start:whatsapp": "node packages/channels/whatsapp/dist/index.js",
+    "start:no-build": "concurrently -n gateway,whatsapp -c cyan,green \"node packages/core/dist/index.js\" \"node packages/channels/whatsapp/dist/index.js\""
   },
   "devDependencies": {
+    "concurrently": "^8.2.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
     "@types/node": "^22.0.0"

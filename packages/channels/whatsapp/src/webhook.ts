@@ -10,54 +10,71 @@ export function createWebhookServer(
   app.use(express.json({ limit: "10mb" }));
 
   // Evolution API v2 envia tudo nessa rota
-  app.post("/webhook", async (req: Request, res: Response) => {
-    // responde rápido — processamento é assíncrono
-    res.status(200).json({ received: true });
+  app.post(
+    ["/webhook", "/webhook/messages-upsert"],
+    async (req: Request, res: Response) => {
+      // responde rápido — processamento é assíncrono
+      res.status(200).json({ received: true });
 
-    try {
-      const payload = req.body as EvolutionWebhookPayload;
+      try {
+        const payload = req.body as EvolutionWebhookPayload;
 
-      // filtra apenas mensagens recebidas
-      if (payload.event !== "messages.upsert") return;
-      if (!payload.data) return;
+        // filtra apenas mensagens recebidas
+        if (payload.event !== "messages.upsert") return;
+        if (!payload.data) return;
 
-      const { key, message, pushName, messageTimestamp } = payload.data;
+        const { key, message, pushName, messageTimestamp } = payload.data;
 
-      // ignora mensagens enviadas pelo próprio bot
-      if (key.fromMe) return;
+        // ignora mensagens enviadas pelo próprio bot
+        if (key.fromMe) return;
 
-      // extrai texto da mensagem
-      const text = extractText(message);
-      if (!text) {
-        logger.debug("Ignoring non-text message", {
-          type: payload.data.messageType,
+        // extrai texto da mensagem
+        const text = extractText(message);
+        if (!text) {
+          logger.debug("Ignoring non-text message", {
+            type: payload.data.messageType,
+          });
+          return;
+        }
+
+        // normaliza o número
+        const from = normalizeJid(key.remoteJid);
+
+        const incoming: IncomingMessage = {
+          instanceName: payload.instance,
+          from,
+          pushName: pushName ?? from,
+          text: text.trim(),
+          messageId: key.id,
+          timestamp: messageTimestamp,
+        };
+
+        logger.info("Message received", {
+          from: incoming.from,
+          name: incoming.pushName,
+          preview: text.substring(0, 50),
         });
-        return;
+
+        await onMessage(incoming);
+      } catch (err) {
+        logger.error("Webhook processing error", { err });
       }
+    },
+  );
 
-      // normaliza o número
-      const from = normalizeJid(key.remoteJid);
-
-      const incoming: IncomingMessage = {
-        instanceName: payload.instance,
-        from,
-        pushName: pushName ?? from,
-        text: text.trim(),
-        messageId: key.id,
-        timestamp: messageTimestamp,
-      };
-
-      logger.info("Message received", {
-        from: incoming.from,
-        name: incoming.pushName,
-        preview: text.substring(0, 50),
-      });
-
-      await onMessage(incoming);
-    } catch (err) {
-      logger.error("Webhook processing error", { err });
-    }
-  });
+  app.post(
+    [
+      "/webhook/contacts-update",
+      "/webhook/contacts-upsert",
+      "/webhook/chats-update",
+      "/webhook/presence-update",
+      "/webhook/messages-update",
+      "/webhook/send-message",
+    ],
+    (_req: Request, res: Response) => {
+      res.status(200).json({ received: true });
+    },
+  );
 
   // health check
   app.get("/health", (_req: Request, res: Response) => {

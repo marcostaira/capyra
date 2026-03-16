@@ -4,7 +4,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy:assets",
+    "copy:assets": "mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
     "dev": "tsc --watch",
     "start": "node dist/index.js"
   },

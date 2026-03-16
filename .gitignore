@@ -23,4 +23,5 @@ Thumbs.db
 logs/
 
 # Turbo cache
-.turbo
+.turbotest-*.js
+qrcode.html

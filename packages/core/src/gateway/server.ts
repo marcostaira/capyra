@@ -12,13 +12,14 @@ interface GatewayClient {
 }
 
 const clients = new Map<string, GatewayClient>();
+const pendingApprovals = new Map<string, (approved: boolean) => void>();
 
 export function startGateway(port = 18789): WebSocketServer {
   const wss = new WebSocketServer({ port });
 
   console.log(`🦫 Capyra Gateway running on ws://localhost:${port}`);
 
-  wss.on("connection", async (ws, req) => {
+  wss.on("connection", async (ws, _req) => {
     const clientId = uuid();
 
     ws.on("message", async (raw) => {
@@ -26,10 +27,12 @@ export function startGateway(port = 18789): WebSocketServer {
         const msg = JSON.parse(raw.toString());
         await handleMessage(clientId, ws, msg);
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("Gateway handler error:", message);
         ws.send(
           JSON.stringify({
             type: "error",
-            payload: { message: "Invalid message format" },
+            payload: { message },
           }),
         );
       }
@@ -37,6 +40,7 @@ export function startGateway(port = 18789): WebSocketServer {
 
     ws.on("close", () => {
       clients.delete(clientId);
+      pendingApprovals.delete(clientId);
     });
   });
 
@@ -56,7 +60,6 @@ async function handleMessage(
         workspace = "default",
       } = msg.payload as Record<string, string>;
 
-      // cria ou recupera sessão
       const existing = await query<{ id: string }>(
         `
         SELECT id FROM sessions
@@ -107,11 +110,9 @@ async function handleMessage(
 
       const { content } = msg.payload as { content: string };
 
-      // confirma recebimento
       ws.send(JSON.stringify({ type: "ack", payload: { content } }));
 
-      // skills carregadas dinamicamente (simplificado por ora)
-      const { SapB1Skill } = require("../../skills/sap-b1/index");
+      const { SapB1Skill } = require("@capyra/skill-sap-b1");
       const skills = [];
 
       if (process.env.SAP_BASE_URL) {
@@ -141,7 +142,6 @@ async function handleMessage(
             );
           },
           onApprovalRequired: async (toolName, params) => {
-            // envia para o canal e aguarda resposta
             ws.send(
               JSON.stringify({
                 type: "approval_required",
@@ -150,25 +150,30 @@ async function handleMessage(
             );
 
             return new Promise((resolve) => {
-              const handler = (raw: Buffer) => {
-                const response = JSON.parse(raw.toString());
-                if (response.type === "approval_response") {
-                  ws.off("message", handler);
-                  resolve(response.payload.approved === true);
-                }
-              };
-              ws.on("message", handler);
+              // registra o resolver aguardando approval_response
+              pendingApprovals.set(clientId, resolve);
+
               // timeout de 60s
               setTimeout(() => {
-                ws.off("message", handler);
-                resolve(false);
+                if (pendingApprovals.has(clientId)) {
+                  pendingApprovals.delete(clientId);
+                  resolve(false);
+                }
               }, 60000);
             });
           },
         },
         content,
       );
+      break;
+    }
 
+    case "approval_response": {
+      const resolver = pendingApprovals.get(clientId);
+      if (resolver) {
+        pendingApprovals.delete(clientId);
+        resolver((msg.payload as Record<string, unknown>).approved === true);
+      }
       break;
     }
 

@@ -21,10 +21,12 @@ export class GatewayClient extends EventEmitter {
     this.url = url;
     this.secret = secret;
   }
+  private registered = false;
 
   connect(): void {
     logger.info(`Connecting to Gateway: ${this.url}`);
 
+    this.registered = false;
     this.ws = new WebSocket(this.url, {
       headers: { "x-capyra-secret": this.secret },
     });
@@ -58,6 +60,7 @@ export class GatewayClient extends EventEmitter {
   private handleGatewayMessage(msg: GatewayMessage): void {
     switch (msg.type) {
       case "registered":
+        this.registered = true;
         this.emit("registered", msg.payload);
         break;
 
@@ -126,6 +129,6 @@ export class GatewayClient extends EventEmitter {
   }
 
   isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.ws?.readyState === WebSocket.OPEN && this.registered;
   }
 }

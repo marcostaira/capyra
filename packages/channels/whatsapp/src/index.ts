@@ -1,4 +1,7 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { join } from "path";
+dotenv.config({ path: join(__dirname, "..", ".env") });
+
 import { createWebhookServer } from "./webhook";
 import { GatewayClient } from "./gateway-client";
 import { WhatsAppSender } from "./sender";
@@ -17,7 +20,6 @@ const config: ChannelConfig = {
   workspace: process.env.WORKSPACE ?? "default",
 };
 
-// valida config obrigatória
 const required = [
   "EVOLUTION_INSTANCE",
   "EVOLUTION_API_KEY",
@@ -33,7 +35,7 @@ for (const key of required) {
   }
 }
 
-// ─── Sender ────────────────────────────────────────
+// ─── Sender ───────────────────────────────────────
 
 const sender = new WhatsAppSender(
   config.evolutionBaseUrl,
@@ -41,24 +43,30 @@ const sender = new WhatsAppSender(
   config.apiKey,
 );
 
-// ─── Gateway clients por número ────────────────────
-// cada número tem seu próprio cliente Gateway
-// para manter sessões isoladas
+// ─── Gateway clients por número ───────────────────
 
 const gatewayClients = new Map<string, GatewayClient>();
+
+interface ManagedClient {
+  client: GatewayClient;
+  hasPendingApproval: () => boolean;
+  clearPendingApproval: () => void;
+}
 
 async function getOrCreateGatewayClient(
   from: string,
   pushName: string,
-): Promise<GatewayClient> {
-  if (gatewayClients.has(from)) {
-    return gatewayClients.get(from)!;
+): Promise<ManagedClient> {
+  const existing = gatewayClients.get(from);
+  if (existing) {
+    return existing as unknown as ManagedClient;
   }
 
   const client = new GatewayClient(config.gatewayUrl, config.gatewaySecret);
+  let pendingApproval = false;
 
-  // quando o agente responder, envia pro WhatsApp
   client.on("agent_message", async (payload) => {
+    pendingApproval = false;
     const text = payload.content as string;
     try {
       await sender.sendText(from, text);
@@ -67,15 +75,13 @@ async function getOrCreateGatewayClient(
     }
   });
 
-  // quando o agente precisar de aprovação
   client.on("approval_required", async (payload) => {
+    pendingApproval = true;
     const { toolName, params } = payload as {
       toolName: string;
       params: Record<string, unknown>;
     };
-
     const confirmText = buildApprovalMessage(toolName, params);
-
     try {
       await sender.sendText(from, confirmText);
     } catch (err) {
@@ -96,53 +102,69 @@ async function getOrCreateGatewayClient(
   });
 
   client.connect();
-  gatewayClients.set(from, client);
-  return client;
+
+  const managed: ManagedClient = {
+    client,
+    hasPendingApproval: () => pendingApproval,
+    clearPendingApproval: () => {
+      pendingApproval = false;
+    },
+  };
+
+  gatewayClients.set(from, managed as unknown as GatewayClient);
+  return managed;
 }
 
-// ─── Handler de mensagens recebidas ────────────────
+// ─── Handler de mensagens recebidas ───────────────
 
 async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
-  const client = await getOrCreateGatewayClient(msg.from, msg.pushName);
+  const managed = await getOrCreateGatewayClient(msg.from, msg.pushName);
+  const { client } = managed;
 
-  // aguarda conexão se necessário
   if (!client.isConnected()) {
     await waitForConnection(client);
   }
 
-  // verifica se é resposta de aprovação
   const lower = msg.text.toLowerCase().trim();
-  if (["sim", "yes", "s", "y", "confirmar", "confirm", "ok"].includes(lower)) {
-    client.approveToolCall(true);
+  const isApproval = [
+    "sim",
+    "yes",
+    "s",
+    "y",
+    "confirmar",
+    "confirm",
+    "ok",
+  ].includes(lower);
+  const isRejection = ["não", "nao", "no", "n", "cancelar", "cancel"].includes(
+    lower,
+  );
+
+  if ((isApproval || isRejection) && managed.hasPendingApproval()) {
+    managed.clearPendingApproval();
+    client.approveToolCall(isApproval);
     return;
   }
 
-  if (["não", "nao", "no", "n", "cancelar", "cancel"].includes(lower)) {
-    client.approveToolCall(false);
-    return;
-  }
-
-  // mensagem normal para o agente
   client.sendMessage(msg.text);
 }
 
-// ─── Helpers ───────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────
 
 function buildApprovalMessage(
   toolName: string,
   params: Record<string, unknown>,
 ): string {
   const lines = [
-    `⚠️ *Action required*`,
+    `⚠️ *Confirmação necessária*`,
     ``,
-    `The agent wants to execute: *${toolName}*`,
+    `O agente quer executar: *${toolName}*`,
     ``,
-    `Parameters:`,
+    `Parâmetros:`,
     "```",
     JSON.stringify(params, null, 2),
     "```",
     ``,
-    `Reply *yes* to confirm or *no* to cancel.`,
+    `Responda *sim* para confirmar ou *não* para cancelar.`,
   ];
   return lines.join("\n");
 }
@@ -161,14 +183,14 @@ function waitForConnection(
       reject(new Error("Gateway connection timeout"));
     }, timeoutMs);
 
-    client.once("connected", () => {
+    client.once("registered", () => {
       clearTimeout(timer);
       resolve();
     });
   });
 }
 
-// ─── Start ─────────────────────────────────────────
+// ─── Start ────────────────────────────────────────
 
 logger.info("🦫 Capyra WhatsApp Channel starting...");
 logger.info(`Instance: ${config.instanceName}`);
