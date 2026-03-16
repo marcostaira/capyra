@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
 [![Discord](https://img.shields.io/discord/XXXXXXX?label=Discord&logo=discord)](https://discord.gg/capyra)
-[![GitHub Stars](https://img.shields.io/github/stars/yourusername/capyra?style=social)](https://github.com/yourusername/capyra)
+[![GitHub Stars](https://img.shields.io/github/stars/marcostaira/capyra?style=social)](https://github.com/marcostaira/capyra)
 
 [**Quick Start**](#quick-start) · [**Documentation**](https://capyra.dev/docs) · [**Discord**](https://discord.gg/capyra) · [**Skills**](#skills)
 
@@ -434,7 +434,7 @@ Capyra is MIT licensed and community-driven.
 The best way to contribute is to **build a skill** for a system you know well and share it with the community.
 
 ```bash
-git clone https://github.com/yourusername/capyra
+git clone https://github.com/marcostaira/capyra
 cd capyra
 npm install
 npm run dev
@@ -473,7 +473,7 @@ Works on any Linux server, VPS, homelab, or cloud provider.
 
 ## License
 
-MIT © [Marcos](https://github.com/yourusername)
+MIT © [Marcos](https://github.com/marcostaira)
 
 ---
 
